@@ -1,0 +1,19 @@
+{
+  "name": "particle-sandbox",
+  "version": "1.0.0",
+  "description": "Terminal-based falling sand particle simulation",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "demo": "node dist/demo.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "type": "module",
+  "keywords": ["particles", "simulation", "terminal", "falling-sand"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0"
+  }
+}
