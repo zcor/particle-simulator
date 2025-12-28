@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Sandbox</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+      justify-content: center;
+      max-width: 600px;
+    }
+
+    .toolbar button {
+      padding: 10px 16px;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toolbar button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .toolbar button.selected {
+      border-color: #fff;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+    }
+
+    .btn-sand { background: #f4d03f; color: #333; }
+    .btn-water { background: #3498db; color: #fff; }
+    .btn-stone { background: #7f8c8d; color: #fff; }
+    .btn-fire { background: #e74c3c; color: #fff; }
+    .btn-smoke { background: #95a5a6; color: #333; }
+    .btn-wood { background: #8B4513; color: #fff; }
+    .btn-plant { background: #27ae60; color: #fff; }
+    .btn-erase { background: #2c3e50; color: #fff; }
+    .btn-clear { background: #c0392b; color: #fff; }
+
+    #canvas {
+      border: 3px solid #333;
+      border-radius: 8px;
+      cursor: crosshair;
+      touch-action: none;
+      max-width: 100%;
+    }
+
+    .info {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #888;
+      text-align: center;
+    }
+
+    .brush-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      background: #2c3e50;
+      padding: 8px 16px;
+      border-radius: 8px;
+    }
+
+    .brush-control label {
+      font-size: 14px;
+    }
+
+    .brush-control input {
+      width: 100px;
+    }
+
+    .github-link {
+      margin-top: 20px;
+      color: #3498db;
+      text-decoration: none;
+    }
+
+    .github-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Particle Sandbox</h1>
+
+  <div class="toolbar">
+    <button class="btn-sand selected" data-type="sand">Sand</button>
+    <button class="btn-water" data-type="water">Water</button>
+    <button class="btn-stone" data-type="stone">Stone</button>
+    <button class="btn-fire" data-type="fire">Fire</button>
+    <button class="btn-smoke" data-type="smoke">Smoke</button>
+    <button class="btn-wood" data-type="wood">Wood</button>
+    <button class="btn-plant" data-type="plant">Plant</button>
+    <button class="btn-erase" data-type="empty">Eraser</button>
+    <button class="btn-clear" id="clearBtn">Clear</button>
+  </div>
+
+  <div class="brush-control">
+    <label>Brush: <span id="brushValue">5</span></label>
+    <input type="range" id="brushSize" min="1" max="20" value="5">
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <p class="info">Click and drag to spawn particles</p>
+
+  <a href="https://github.com/zcor/particle-simulator" class="github-link" target="_blank">
+    View on GitHub
+  </a>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Grid settings
+    const CELL_SIZE = 4;
+    const WIDTH = Math.floor(Math.min(window.innerWidth - 40, 800) / CELL_SIZE);
+    const HEIGHT = Math.floor(Math.min(window.innerHeight - 300, 500) / CELL_SIZE);
+
+    canvas.width = WIDTH * CELL_SIZE;
+    canvas.height = HEIGHT * CELL_SIZE;
+
+    // Particle types
+    const EMPTY = 0, SAND = 1, WATER = 2, STONE = 3, FIRE = 4, SMOKE = 5, WOOD = 6, PLANT = 7;
+
+    const COLORS = {
+      [EMPTY]: '#1a1a2e',
+      [SAND]: '#f4d03f',
+      [WATER]: '#3498db',
+      [STONE]: '#7f8c8d',
+      [FIRE]: '#e74c3c',
+      [SMOKE]: '#95a5a6',
+      [WOOD]: '#8B4513',
+      [PLANT]: '#27ae60',
+    };
+
+    const TYPE_MAP = {
+      'sand': SAND, 'water': WATER, 'stone': STONE, 'fire': FIRE,
+      'smoke': SMOKE, 'wood': WOOD, 'plant': PLANT, 'empty': EMPTY
+    };
+
+    // World state
+    let grid = [];
+    let lifetime = [];
+
+    for (let y = 0; y < HEIGHT; y++) {
+      grid[y] = new Uint8Array(WIDTH);
+      lifetime[y] = new Uint8Array(WIDTH);
+    }
+
+    // Input state
+    let selectedType = SAND;
+    let brushSize = 5;
+    let isDrawing = false;
+    let lastX = -1, lastY = -1;
+
+    // Toolbar
+    document.querySelectorAll('.toolbar button[data-type]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedType = TYPE_MAP[btn.dataset.type];
+      });
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      for (let y = 0; y < HEIGHT; y++) {
+        grid[y].fill(0);
+        lifetime[y].fill(0);
+      }
+    });
+
+    document.getElementById('brushSize').addEventListener('input', (e) => {
+      brushSize = parseInt(e.target.value);
+      document.getElementById('brushValue').textContent = brushSize;
+    });
+
+    // Drawing
+    function getGridPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: Math.floor((clientX - rect.left) / CELL_SIZE),
+        y: Math.floor((clientY - rect.top) / CELL_SIZE)
+      };
+    }
+
+    function spawnBrush(cx, cy) {
+      const half = Math.floor(brushSize / 2);
+      for (let dy = -half; dy <= half; dy++) {
+        for (let dx = -half; dx <= half; dx++) {
+          if (dx*dx + dy*dy <= half*half + half) {
+            const x = cx + dx, y = cy + dy;
+            if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+              if (Math.random() > 0.3) {
+                grid[y][x] = selectedType;
+                if (selectedType === FIRE) lifetime[y][x] = 20 + Math.random() * 30;
+                else if (selectedType === SMOKE) lifetime[y][x] = 40 + Math.random() * 40;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => { isDrawing = true; const p = getGridPos(e); spawnBrush(p.x, p.y); });
+    canvas.addEventListener('mousemove', (e) => { if (isDrawing) { const p = getGridPos(e); spawnBrush(p.x, p.y); } });
+    canvas.addEventListener('mouseup', () => isDrawing = false);
+    canvas.addEventListener('mouseleave', () => isDrawing = false);
+
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDrawing = true; const p = getGridPos(e); spawnBrush(p.x, p.y); });
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (isDrawing) { const p = getGridPos(e); spawnBrush(p.x, p.y); } });
+    canvas.addEventListener('touchend', () => isDrawing = false);
+
+    // Physics
+    function inBounds(x, y) { return x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT; }
+    function isEmpty(x, y) { return inBounds(x, y) && grid[y][x] === EMPTY; }
+    function isType(x, y, t) { return inBounds(x, y) && grid[y][x] === t; }
+    function swap(x1, y1, x2, y2) {
+      const t = grid[y1][x1]; grid[y1][x1] = grid[y2][x2]; grid[y2][x2] = t;
+      const l = lifetime[y1][x1]; lifetime[y1][x1] = lifetime[y2][x2]; lifetime[y2][x2] = l;
+    }
+
+    function update() {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+
+      for (let y = HEIGHT - 1; y >= 0; y--) {
+        const startX = dir > 0 ? 0 : WIDTH - 1;
+        const endX = dir > 0 ? WIDTH : -1;
+
+        for (let x = startX; x !== endX; x += dir) {
+          const p = grid[y][x];
+          if (p === EMPTY) continue;
+
+          if (p === SAND) {
+            if (isEmpty(x, y+1) || isType(x, y+1, WATER)) {
+              swap(x, y, x, y+1);
+            } else {
+              const d = Math.random() > 0.5 ? 1 : -1;
+              if (isEmpty(x+d, y+1) || isType(x+d, y+1, WATER)) swap(x, y, x+d, y+1);
+              else if (isEmpty(x-d, y+1) || isType(x-d, y+1, WATER)) swap(x, y, x-d, y+1);
+            }
+          }
+
+          else if (p === WATER) {
+            if (isEmpty(x, y+1)) swap(x, y, x, y+1);
+            else {
+              const d = Math.random() > 0.5 ? 1 : -1;
+              if (isEmpty(x+d, y+1)) swap(x, y, x+d, y+1);
+              else if (isEmpty(x-d, y+1)) swap(x, y, x-d, y+1);
+              else if (isEmpty(x+d, y)) swap(x, y, x+d, y);
+              else if (isEmpty(x-d, y)) swap(x, y, x-d, y);
+            }
+          }
+
+          else if (p === FIRE) {
+            lifetime[y][x]--;
+            if (lifetime[y][x] <= 0) {
+              grid[y][x] = Math.random() > 0.5 ? SMOKE : EMPTY;
+              if (grid[y][x] === SMOKE) lifetime[y][x] = 40 + Math.random() * 40;
+              continue;
+            }
+            // Spread to wood
+            [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([dx,dy]) => {
+              if (isType(x+dx, y+dy, WOOD) && Math.random() > 0.95) {
+                grid[y+dy][x+dx] = FIRE;
+                lifetime[y+dy][x+dx] = 20 + Math.random() * 30;
+              }
+              if (isType(x+dx, y+dy, WATER) && Math.random() > 0.7) {
+                grid[y+dy][x+dx] = SMOKE;
+                lifetime[y+dy][x+dx] = 40;
+                grid[y][x] = EMPTY;
+              }
+            });
+            if (Math.random() > 0.7 && isEmpty(x, y-1)) swap(x, y, x, y-1);
+          }
+
+          else if (p === SMOKE) {
+            lifetime[y][x]--;
+            if (lifetime[y][x] <= 0) { grid[y][x] = EMPTY; continue; }
+            const d = Math.random() > 0.5 ? 1 : -1;
+            if (isEmpty(x, y-1)) swap(x, y, x, y-1);
+            else if (isEmpty(x+d, y-1)) swap(x, y, x+d, y-1);
+            else if (isEmpty(x+d, y)) swap(x, y, x+d, y);
+          }
+
+          else if (p === PLANT) {
+            const hasWater = isType(x-1,y,WATER)||isType(x+1,y,WATER)||isType(x,y-1,WATER)||isType(x,y+1,WATER);
+            if (hasWater && Math.random() > 0.98) {
+              if (isEmpty(x, y-1)) grid[y-1][x] = PLANT;
+              const d = Math.random() > 0.5 ? 1 : -1;
+              if (Math.random() > 0.7 && isEmpty(x+d, y-1)) grid[y-1][x+d] = PLANT;
+            }
+          }
+        }
+      }
+    }
+
+    // Render
+    function render() {
+      ctx.fillStyle = COLORS[EMPTY];
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const p = grid[y][x];
+          if (p !== EMPTY) {
+            if (p === FIRE) {
+              ctx.fillStyle = Math.random() > 0.5 ? '#e74c3c' : '#f39c12';
+            } else if (p === WATER) {
+              ctx.fillStyle = Math.random() > 0.9 ? '#5dade2' : '#3498db';
+            } else {
+              ctx.fillStyle = COLORS[p];
+            }
+            ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          }
+        }
+      }
+    }
+
+    // Game loop
+    function loop() {
+      update();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>

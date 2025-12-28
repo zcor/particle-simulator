@@ -1,17 +1,29 @@
 # Particle Sandbox
 
-A mesmerizing terminal-based particle simulation inspired by "falling sand" games. Watch sand pile up, water flow, fire spread, and plants grow—all rendered with colorful Unicode characters in your terminal.
+A mesmerizing particle simulation inspired by "falling sand" games. Watch sand pile up, water flow, fire spread, and plants grow!
+
+**[Play in your browser](https://zcor.github.io/particle-simulator/)** — no install required!
 
 ![Particle Sandbox Demo](demo.gif)
 
-## Installation
+## Web Version
+
+Play instantly at **https://zcor.github.io/particle-simulator/**
+
+- Works on desktop and mobile
+- Click/tap and drag to spawn particles
+- Select particle types from the toolbar
+
+## Terminal Version
+
+### Installation
 
 ```bash
 npm install
 npm run build
 ```
 
-## Usage
+### Usage
 
 **Interactive mode** — play with particles yourself:
 ```bash
